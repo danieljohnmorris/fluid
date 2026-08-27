@@ -1,6 +1,6 @@
 import { init, surface, type Gpu, type Surface } from "vgpu";
 
-
+import { FIXED_STEP, fixedStepCount } from "./fixed-step";
 import { installStirInput } from "./pointer-input";
 import { InterpGate } from "./interp-gate";
 import {
@@ -13,21 +13,10 @@ import {
   type Fluid,
 } from "./simulation";
 
-const FIXED_STEP = 1 / 60;
-
 interface RendererOptions {
   canvas: HTMLCanvasElement;
 }
 
-function fixedStepCount(accumulator: number, elapsed: number) {
-  let next = accumulator + Math.min(elapsed, 1 / 30);
-  let steps = 0;
-  while (next >= FIXED_STEP && steps < 2) {
-    next -= FIXED_STEP;
-    steps++;
-  }
-  return { steps, accumulator: steps === 2 ? 0 : next };
-}
 
 export function createRenderer(options: RendererOptions) {
   let disposed = false;
