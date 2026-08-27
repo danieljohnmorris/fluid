@@ -36,23 +36,40 @@ export function createRenderer(options: RendererOptions) {
   let animationFrame = 0;
   let accumulator = 0;
   let previous = 0;
+  // Exponentially weighted mean rAF interval, to gate interpolation on
+  // displays that genuinely outrun the sim.
+  let meanIntervalMs = 0;
   // Live counters for the ?debug HUD: frames presented and sim steps taken.
   const stats = { frames: 0, steps: 0, lastStepsPerFrame: 0 };
+
 
   const tick = (now: number) => {
     if (disposed) return;
     if (!document.hidden && fluid && input && canvasSurface) {
-      const fixed = fixedStepCount(accumulator, (now - previous) / 1000);
+      const elapsedMs = now - previous;
+      const fixed = fixedStepCount(accumulator, elapsedMs / 1000);
       accumulator = fixed.accumulator;
       stats.steps += fixed.steps;
       stats.lastStepsPerFrame = fixed.steps;
       for (let i = 0; i < fixed.steps; i++) {
         stepFluid(fluid, input);
       }
-      // The sim runs at a fixed 60 Hz; displays refresh faster. Blend the
-      // pre-step and post-step dye fields so presented frames advance on
-      // every refresh instead of only on frames that stepped the sim.
-      renderFluid(fluid, canvasSurface, interpolationPhase(accumulator, FIXED_STEP));
+      // Interpolate between the pre-step and post-step dye fields only when
+      // the display refreshes clearly faster than the 60 Hz sim: there,
+      // half the frames would otherwise be duplicates. At ~60 Hz the rAF
+      // clock jitters around the step boundary, and phase blending turns
+      // that jitter into visible speed oscillation, so render the latest
+      // state directly instead.
+      if (elapsedMs >= 1 && elapsedMs <= 50) {
+        meanIntervalMs = meanIntervalMs
+          ? meanIntervalMs + 0.05 * (elapsedMs - meanIntervalMs)
+          : elapsedMs;
+      }
+      const phase =
+        meanIntervalMs > 0 && meanIntervalMs < FIXED_STEP * 1000 * 0.75
+          ? interpolationPhase(accumulator, FIXED_STEP)
+          : 1;
+      renderFluid(fluid, canvasSurface, phase);
     }
     // Always reset the clock while hidden so visibility changes never catch up.
     previous = now;
