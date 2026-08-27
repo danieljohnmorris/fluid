@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluid</title>
+<meta name="description" content="A pressure-projected Navier-Stokes fluid solver in a WebGPU compute shader. Stir the dye with your pointer.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: #000;
+    color: #fafafc;
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow: hidden;
+  }
+  #stage { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  .label {
+    position: fixed; left: 20px; bottom: 20px;
+    pointer-events: none;
+    font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+    color: rgba(250,250,252,.72);
+  }
+  .label .sub { margin-top: 4px; color: rgba(250,250,252,.45); }
+  .label a {
+    pointer-events: auto;
+    color: inherit; text-decoration: none;
+    border-bottom: 1px solid rgba(250,250,252,.35);
+  }
+  .label a:hover { color: #fafafc; }
+  #notice:not([hidden]) {
+    position: fixed; inset: 0;
+    display: grid; place-items: center; padding: 24px;
+    text-align: center;
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: rgba(250,250,252,.72);
+    background: #000;
+  }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div class="label">
+  <div>Fluid</div>
+  <div class="sub">WebGPU · vgpu · <a href="https://danieljohnmorris.com/">danieljohnmorris.com</a></div>
+</div>
+<div id="notice" hidden>This demo needs a browser with WebGPU: Chrome or Edge 113+, Safari 18+, Firefox 141+.</div>
+<script type="module" src="./index.js"></script>
+</body>
+</html>
