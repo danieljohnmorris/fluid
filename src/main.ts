@@ -8,8 +8,8 @@ if (!('gpu' in navigator)) {
 } else {
   const renderer = createRenderer({ canvas });
 
-  // ?debug overlays live pacing counters: presented fps, sim steps/s, and the
-  // step count of the most recent frame (0/1/2 at a 60 Hz sim).
+  // ?debug overlays live pacing counters: presented fps, sim steps/s,
+  // interpolation mode, measured frame interval, and canvas size.
   if (new URLSearchParams(location.search).has('debug')) {
     const hud = document.createElement('div');
     hud.style.cssText =
@@ -27,8 +27,8 @@ if (!('gpu' in navigator)) {
       const fps = (renderer.stats.frames - lastFrames) / seconds;
       const sps = (renderer.stats.steps - lastSteps) / seconds;
       hud.textContent =
-        `${fps.toFixed(0)} fps  ${sps.toFixed(0)} steps/s\n` +
-        `last frame: ${renderer.stats.lastStepsPerFrame} step(s)\n` +
+        `${fps.toFixed(0)} fps  ${sps.toFixed(0)} steps/s  interp: ${renderer.stats.interp ? 'on' : 'off'}\n` +
+        `last frame: ${renderer.stats.lastStepsPerFrame} step(s)  interval: ${renderer.stats.intervalMs.toFixed(1)}ms\n` +
         `canvas: ${canvas.width}x${canvas.height} @${window.devicePixelRatio}x`;
       lastFrames = renderer.stats.frames;
       lastSteps = renderer.stats.steps;

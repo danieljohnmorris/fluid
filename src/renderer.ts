@@ -1,6 +1,8 @@
 import { init, surface, type Gpu, type Surface } from "vgpu";
 
+
 import { installStirInput } from "./pointer-input";
+import { InterpGate } from "./interp-gate";
 import {
   createFluid,
   interpolationPhase,
@@ -39,8 +41,18 @@ export function createRenderer(options: RendererOptions) {
   // Exponentially weighted mean rAF interval, to gate interpolation on
   // displays that genuinely outrun the sim.
   let meanIntervalMs = 0;
+  // Hysteresis gate: adaptive-refresh displays change rate mid-session, so
+  // interpolation must switch on and off at different thresholds, held for
+  // a settling period, or it flaps at the boundary.
+  const interpGate = new InterpGate();
   // Live counters for the ?debug HUD: frames presented and sim steps taken.
-  const stats = { frames: 0, steps: 0, lastStepsPerFrame: 0 };
+  const stats = {
+    frames: 0,
+    steps: 0,
+    lastStepsPerFrame: 0,
+    interp: false,
+    intervalMs: 0,
+  };
 
 
   const tick = (now: number) => {
@@ -65,10 +77,11 @@ export function createRenderer(options: RendererOptions) {
           ? meanIntervalMs + 0.05 * (elapsedMs - meanIntervalMs)
           : elapsedMs;
       }
-      const phase =
-        meanIntervalMs > 0 && meanIntervalMs < FIXED_STEP * 1000 * 0.75
-          ? interpolationPhase(accumulator, FIXED_STEP)
-          : 1;
+      const phase = interpGate.update(meanIntervalMs)
+        ? interpolationPhase(accumulator, FIXED_STEP)
+        : 1;
+      stats.interp = interpGate.interpolating;
+      stats.intervalMs = meanIntervalMs;
       renderFluid(fluid, canvasSurface, phase);
     }
     // Always reset the clock while hidden so visibility changes never catch up.
