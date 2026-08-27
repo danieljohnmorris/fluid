@@ -36,12 +36,16 @@ export function createRenderer(options: RendererOptions) {
   let animationFrame = 0;
   let accumulator = 0;
   let previous = 0;
+  // Live counters for the ?debug HUD: frames presented and sim steps taken.
+  const stats = { frames: 0, steps: 0, lastStepsPerFrame: 0 };
 
   const tick = (now: number) => {
     if (disposed) return;
     if (!document.hidden && fluid && input && canvasSurface) {
       const fixed = fixedStepCount(accumulator, (now - previous) / 1000);
       accumulator = fixed.accumulator;
+      stats.steps += fixed.steps;
+      stats.lastStepsPerFrame = fixed.steps;
       for (let i = 0; i < fixed.steps; i++) {
         stepFluid(fluid, input);
       }
@@ -52,6 +56,7 @@ export function createRenderer(options: RendererOptions) {
     }
     // Always reset the clock while hidden so visibility changes never catch up.
     previous = now;
+    stats.frames++;
     animationFrame = requestAnimationFrame(tick);
   };
 
@@ -66,11 +71,9 @@ export function createRenderer(options: RendererOptions) {
   function fail(error: unknown): never {
     dispose();
     throw error;
-
   }
 
   const initialize = async () => {
-
     if (disposed) return;
     const nextGpu = await init();
     if (disposed) {
@@ -78,7 +81,10 @@ export function createRenderer(options: RendererOptions) {
       return;
     }
     gpu = nextGpu;
-    canvasSurface = surface(gpu, options.canvas, { dpr: [1, 2] });
+    // The dye field is 512x288; DPR > 1 only multiplies display-pass fragment
+    // work with no fidelity to gain. Chrome's WebGPU path in particular pays
+    // for the extra pixels and can drop frames at fullscreen retina sizes.
+    canvasSurface = surface(gpu, options.canvas, { dpr: [1, 1] });
     fluid = createFluid(gpu);
     input = installStirInput(options.canvas);
     await prepareFluid(fluid, canvasSurface);
@@ -100,5 +106,5 @@ export function createRenderer(options: RendererOptions) {
     fail(error);
   });
 
-  return { ready, dispose };
+  return { ready, dispose, stats };
 }
