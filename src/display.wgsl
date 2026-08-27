@@ -1,19 +1,30 @@
 import { index_of } from "./fluid-common.wgsl";
 
+// `phase` first so the struct is 16 bytes (f32 + pad + vec2f), which the
+// uniform address space requires.
 struct DisplayConfig {
+  phase: f32,
   output_size: vec2f,
 }
 const DYE_SIZE = vec2u(512, 288);
 @group(0) @binding(0) var<uniform> config: DisplayConfig;
 @group(0) @binding(1) var<storage, read> dye: array<vec4f>;
+@group(0) @binding(2) var<storage, read> prev_dye: array<vec4f>;
 
 fn sample_dye(p: vec2f) -> vec3f {
   let grid = clamp(p * vec2f(DYE_SIZE) - 0.5, vec2f(0), vec2f(DYE_SIZE) - 1.0);
   let cell = vec2i(floor(grid));
   let f = fract(grid);
-  let bottom = mix(dye[index_of(cell, DYE_SIZE)].rgb, dye[index_of(cell + vec2i(1, 0), DYE_SIZE)].rgb, f.x);
-  let top = mix(dye[index_of(cell + vec2i(0, 1), DYE_SIZE)].rgb, dye[index_of(cell + vec2i(1, 1), DYE_SIZE)].rgb, f.x);
-  return mix(bottom, top, f.y);
+  let il = index_of(cell, DYE_SIZE);
+  let ir = index_of(cell + vec2i(1, 0), DYE_SIZE);
+  let iu = index_of(cell + vec2i(0, 1), DYE_SIZE);
+  let id = index_of(cell + vec2i(1, 1), DYE_SIZE);
+  let curr = mix(mix(dye[il].rgb, dye[ir].rgb, f.x), mix(dye[iu].rgb, dye[id].rgb, f.x), f.y);
+  let prev = mix(mix(prev_dye[il].rgb, prev_dye[ir].rgb, f.x), mix(prev_dye[iu].rgb, prev_dye[id].rgb, f.x), f.y);
+  // The solver steps at a fixed 60 Hz; displays refresh faster. Blend the
+  // pre-step and post-step dye fields by the phase between steps so motion
+  // advances on every presented frame instead of quantising to step frames.
+  return mix(prev, curr, config.phase);
 }
 
 @fragment

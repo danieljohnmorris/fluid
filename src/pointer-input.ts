@@ -50,12 +50,15 @@ export function installStirInput(canvas: HTMLCanvasElement): StirInput {
       0.004,
       Math.min(0.05, (event.timeStamp - lastTime) / 1000)
     );
-    from = to;
-    to = next;
     velocity = [
-      Math.max(-2.5, Math.min(2.5, (to[0] - from[0]) / dt)),
-      Math.max(-2.5, Math.min(2.5, (to[1] - from[1]) / dt)),
+      Math.max(-2.5, Math.min(2.5, (next[0] - to[0]) / dt)),
+      Math.max(-2.5, Math.min(2.5, (next[1] - to[1]) / dt)),
     ];
+    // `from` stays at the last consumed position: each sim step must splat
+    // the full path travelled since the previous step. Advancing it per input
+    // sample drops every intermediate segment (input devices sample faster
+    // than the 60 Hz step rate) and the dragged trail develops gaps.
+    to = next;
     lastTime = event.timeStamp;
     decay = 2;
   };
