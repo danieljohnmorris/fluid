@@ -8,6 +8,7 @@ import pressureWgsl from "./pressure.wgsl";
 import projectWgsl from "./project.wgsl";
 import advectDyeWgsl from "./advect-dye.wgsl";
 import displayWgsl from "./display.wgsl";
+import copyWgsl from "./copy.wgsl";
 import { compute, effect, frame, pingPongStorage, storage } from "vgpu";
 
 const GRID_SIZE = [128, 72] as const;
@@ -22,6 +23,8 @@ export function createFluid(gpu: Gpu) {
     allocated.push(velocity.read, velocity.write);
     const dye = pingPongStorage(gpu, DYE_CELLS * 16);
     allocated.push(dye.read, dye.write);
+    const dyePrev = storage(gpu, DYE_CELLS * 16, "read-write");
+    allocated.push(dyePrev);
     const pressure = pingPongStorage(gpu, CELLS * 4);
     allocated.push(pressure.read, pressure.write);
     const divergence = storage(gpu, CELLS * 4, "read-write");
@@ -33,6 +36,7 @@ export function createFluid(gpu: Gpu) {
       gpu,
       velocity,
       dye,
+      dyePrev,
       pressure,
       divergence,
       curl,
@@ -56,6 +60,7 @@ export function destroyFluid(fluid: Fluid): void {
     fluid.velocity.write,
     fluid.dye.read,
     fluid.dye.write,
+    fluid.dyePrev,
     fluid.pressure.read,
     fluid.pressure.write,
     fluid.divergence,
@@ -83,6 +88,7 @@ function createPasses(gpu: Gpu) {
     pressure: withGrid(pressureWgsl),
     project: withGrid(projectWgsl),
     advectDye: withGrid(advectDyeWgsl),
+    copyDye: compute(gpu, copyWgsl),
     display: effect(gpu, displayWgsl),
   };
 }
@@ -96,13 +102,21 @@ export async function prepareFluid(
 }
 
 export function resizeFluid(fluid: Fluid, output: Target): void {
-  fluid.passes.display.set({ config: { output_size: output.size } });
+  fluid.passes.display.set({
+    config: { output_size: output.size, phase: 1 },
+  });
 }
 
 export function stepFluid(fluid: Fluid, input?: StirInput): void {
   if (input?.active) fluid.lastInputStep = fluid.step;
   const dynamic = inputUniforms(fluid, input);
   const p = fluid.passes;
+
+  // Snapshot the pre-step dye so the display pass can interpolate between
+  // the previous and current sim states at the display refresh rate.
+  p.copyDye
+    .set({ src: fluid.dye.read, dst: fluid.dyePrev })
+    .dispatch(64, 36);
 
   p.advectVelocity
     .set({
@@ -163,8 +177,18 @@ export function stepFluid(fluid: Fluid, input?: StirInput): void {
   input?.consumeStep();
 }
 
-export function renderFluid(fluid: Fluid, output: Target): void {
-  fluid.passes.display.set({ dye: fluid.dye.read });
+// Blend weight toward the post-step dye field: 0 right after a step, 1 just
+// before the next. `accumulator` is the leftover time since the last step.
+export function interpolationPhase(accumulator: number, fixedStep: number): number {
+  return Math.min(1, accumulator / fixedStep);
+}
+
+export function renderFluid(fluid: Fluid, output: Target, phase = 1): void {
+  fluid.passes.display.set({
+    config: { output_size: output.size, phase },
+    dye: fluid.dye.read,
+    prev_dye: fluid.dyePrev,
+  });
   frame(fluid.gpu, (currentFrame) => {
     currentFrame.pass(output, fluid.passes.display);
   });

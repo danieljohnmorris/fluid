@@ -1,8 +1,9 @@
-import { surface, type Gpu, type Surface } from "vgpu";
+import { init, surface, type Gpu, type Surface } from "vgpu";
 
 import { installStirInput } from "./pointer-input";
 import {
   createFluid,
+  interpolationPhase,
   prepareFluid,
   renderFluid,
   resizeFluid,
@@ -44,7 +45,10 @@ export function createRenderer(options: RendererOptions) {
       for (let i = 0; i < fixed.steps; i++) {
         stepFluid(fluid, input);
       }
-      renderFluid(fluid, canvasSurface);
+      // The sim runs at a fixed 60 Hz; displays refresh faster. Blend the
+      // pre-step and post-step dye fields so presented frames advance on
+      // every refresh instead of only on frames that stepped the sim.
+      renderFluid(fluid, canvasSurface, interpolationPhase(accumulator, FIXED_STEP));
     }
     // Always reset the clock while hidden so visibility changes never catch up.
     previous = now;
@@ -62,10 +66,11 @@ export function createRenderer(options: RendererOptions) {
   function fail(error: unknown): never {
     dispose();
     throw error;
+
   }
 
   const initialize = async () => {
-    const { init } = await import("vgpu");
+
     if (disposed) return;
     const nextGpu = await init();
     if (disposed) {
